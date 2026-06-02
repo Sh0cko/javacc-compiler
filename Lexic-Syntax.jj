@@ -1,0 +1,814 @@
+
+options {
+    STATIC = false;
+    IGNORE_CASE = false;
+    DEBUG_TOKEN_MANAGER = false;
+}
+
+
+PARSER_BEGIN(Lexico)
+
+
+import java.util.*;
+import javax.swing.*;
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.FileReader;
+import javax.swing.filechooser.FileNameExtensionFilter;
+
+//java -cp "DireccionDelJar" org.javacc.parser.Main "Nombre.jj
+
+public class Lexico 
+{
+
+    //OBTENER ARCHIVO
+    private static void getFile() 
+    {
+        JFileChooser search = new JFileChooser();
+        FileNameExtensionFilter filter1 = new FileNameExtensionFilter("Archivos de texto", "txt");
+        search.setFileFilter(filter1);
+
+        int option = search.showOpenDialog(null);
+        if (option == JFileChooser.APPROVE_OPTION) 
+        {
+            file = search.getSelectedFile();
+        }
+    }
+
+
+    
+    public static int contadorIdentificadores = 0;
+    public static String identificadoresUnicos = "";
+    private static File file;
+    private static int contador = 0;
+
+    // TABLA DE SIMBOLOS
+    public static class MiHashMap 
+    {
+        public LinkedHashMap<String, String> hashMap;
+        private HashSet<String> hashSet;
+
+        public MiHashMap() 
+        {
+            hashMap = new LinkedHashMap<String, String>(); // Especificando tipo de clave y valor
+            hashSet = new HashSet<String>(); // Especificando tipo de elementos
+        }
+
+        // Método para agregar un elemento sin repetición
+        public void agregar(String tokenNombre, String valor) 
+        {
+            if (hashSet.add(valor)) // Si no está presente, se añade al HashSet
+            { 
+                hashMap.put(tokenNombre, valor);
+                contador += 1; // contador de las ID
+            }
+        }
+
+        // comprobación
+        public boolean contieneValor(String valor) 
+        {
+            return hashSet.contains(valor);
+        }
+    }
+
+    //PROCESAR IDENTIFICADORES Y SUS INDICES
+    public static void procesarIdentificador(Token t) 
+    {
+        String identificadorBusqueda = ";" + t.image + "=";
+        int index = identificadoresUnicos.indexOf(identificadorBusqueda);
+
+        int indice;
+        if (index == -1) // NUEVO IDENTIFICADOR
+        { 
+            indice = contadorIdentificadores++;
+            identificadoresUnicos += identificadorBusqueda + indice + ";";
+        } 
+        else  // IDENTIFICADOR REPETIDO
+        {
+            int startIndex = index + identificadorBusqueda.length();
+            int endIndex = identificadoresUnicos.indexOf(";", startIndex);
+            indice = Integer.parseInt(identificadoresUnicos.substring(startIndex, endIndex));
+        }
+
+        // Asigna el índice al token y agrégalo a la lista de tokens
+        t.specialToken = new Token();  // `specialToken` para guardar el índice
+        t.specialToken.image = String.valueOf(indice);
+        tokensList.add(t);
+    }
+
+    //Método para imprimir tokenID con su indice
+    public static void ImprimirTokensId(String tipo, int indice) 
+    {
+        System.out.println(tipo + " -> " + indice + "\n");
+    }
+
+    //Método para imprimir tokens con su tipo y contenido
+    public static void ImprimirTokens(String tipo, String imagen) 
+    {
+        System.out.println(tipo + " -> " + imagen + "\n");
+    }
+
+    static ArrayList<Token> tokensList = new ArrayList<Token>();
+
+    //MAIN MAIN MAIN MAIN
+    public static void main(String[] args) 
+    {
+        MiHashMap miHashMap = new MiHashMap();
+        getFile();
+
+        if (file == null) {
+            System.out.println("Archivo inválido o no seleccionado");
+            System.exit(-1);
+        }
+
+
+        try {
+            // Análisis léxico y captura de tokens
+            FileReader reader = new FileReader(file);
+            LexicoTokenManager lexer = new LexicoTokenManager(new SimpleCharStream(reader));
+            Token t;
+
+
+            while ((t = lexer.getNextToken()).kind != LexicoTokenManager.EOF) {
+                
+                //GUARDADO DE TOKENS LEIDOS
+                if (t.kind != LexicoConstants.IDENTIFICADOR) 
+                {
+                    tokensList.add(t);  // Captura el token en la lista
+                }
+                else
+                {
+                    procesarIdentificador(t);
+                }
+                // Opcional: si necesitas agregar ciertos tokens a la tabla de símbolos
+                if (t.kind == LexicoConstants.IDENTIFICADOR) {
+                    String clave = String.valueOf(contador);
+                    miHashMap.agregar(clave, t.image);
+                }
+            }
+
+            /*
+            for (Token token : tokensList) 
+            {
+                String tipoToken = obtenerNombreToken(token.kind);
+                if (token.kind == LexicoConstants.IDENTIFICADOR) {
+                ImprimirTokensId(tipoToken, Integer.parseInt(token.specialToken.image));
+                } 
+                else 
+                {
+                    ImprimirTokens(tipoToken, token.image);
+                }
+            }
+            */
+
+            /* 
+            Mostrar tabla de símbolos
+            System.out.println("Tabla de símbolos:");
+            for (Map.Entry<String, String> entry : miHashMap.hashMap.entrySet()) 
+            {
+                System.out.println(entry.getKey() + " -> " + entry.getValue());
+            }
+            */
+
+            // INICIO ANALISIS SINTACTICO //
+            reader.close(); // Cierra el flujo de lectura anterior
+            reader = new FileReader(file); // Vuelve a abrir el archivo
+            SimpleCharStream charStream = new SimpleCharStream(reader);
+            LexicoTokenManager newLexer = new LexicoTokenManager(charStream);
+
+            try 
+            {
+                Lexico parser = new Lexico(newLexer);
+
+                parser.SyntaxAnalisis();
+
+                // Verifica si aún quedan tokens sin consumir
+                Token nextToken = newLexer.getNextToken();
+                if (nextToken.kind != 0) // Si no es el token EOF 
+                { 
+                    throw new ParseException("Estructura del código incorrecta");
+                }
+
+                System.out.println("\u001B[32m\nLa declaración es sintácticamente correcta.\u001B[0m");
+            
+            } 
+            catch (ParseException e) {
+            System.err.println("\u001B[31mError sintáctico: " + e.getMessage() + "\u001B[0m");
+            }
+            // FINAL ANALISIS SINTACTICO //
+
+
+        } catch (FileNotFoundException e) {
+            System.err.println("Archivo no encontrado: " + e.getMessage());
+        } catch (Exception e) {
+            System.err.println("Error al procesar el archivo: " + e.getMessage());
+        }
+    }
+
+    // Método auxiliar para convertir el número del token a su nombre.
+    public static String obtenerNombreToken(int tipo) {
+        switch (tipo) {
+            case LexicoConstants.TipoDato:
+                return "Tipo de Dato";
+            case LexicoConstants.OpAritmetico:
+                return "Operador Aritmético";
+            case LexicoConstants.OpAsignacion:
+                return "Operador de Asignación";
+            case LexicoConstants.OpRelacional:
+                return "Operador Relacional";
+            case LexicoConstants.OpLogico:
+                return "Operador Lógico";
+            case LexicoConstants.Leer:
+                return "Leer";
+            case LexicoConstants.Preguntar:
+                return "Preguntar";
+            case LexicoConstants.Bucle:
+                return "Bucle";
+            case LexicoConstants.Consecuencia:
+                return "Consecuencia";
+            case LexicoConstants.Aleatorio:
+                return "Aleatorio";
+            case LexicoConstants.DefFuncion:
+                return "Definir Función";
+            case LexicoConstants.Retroceder:
+                return "Retroceder";
+            case LexicoConstants.Privacidad:
+                return "Privacidad";
+            case LexicoConstants.Clase:
+                return "Clase";
+            case LexicoConstants.ClaseInicializar:
+                return "Inicializacion de Clase";
+            case LexicoConstants.Importar:
+                return "Importar";
+            case LexicoConstants.ConvertirTipoDato:
+                return "Convertir entre tipo de dato";
+            case LexicoConstants.Pertenencia:
+                return "Pertenencia";
+            case LexicoConstants.AtraparExcepcion:
+                return "AtraparExcepcion";
+            case LexicoConstants.DelimitarCodigo:
+                return "Delimitar Código";
+            case LexicoConstants.Escribir:
+                return "Escribir";
+            case LexicoConstants.DelimitarFinal:
+                return "Delimitar Final";
+            case LexicoConstants.Excepcion:
+                return "Excepcion";
+            case LexicoConstants.Llamar:
+                return "Llamar";
+            case LexicoConstants.Cuando:
+                return "Cuando";
+            case LexicoConstants.DefinirModulo:
+                return "Definir Módulo";
+            case LexicoConstants.Encadenar:
+                return "Encadenar";
+            case LexicoConstants.Objeto:
+                return "Objeto";
+            case LexicoConstants.AutoReferencia:
+                return "AutoReferencia";
+            case LexicoConstants.InicializarObj:
+                return "Inicializar Objeto";
+            case LexicoConstants.Metodo:
+                return "Método";
+            case LexicoConstants.LlaveIzquierda:
+                return "Llave Izquierda";
+            case LexicoConstants.LlaveDerecha:
+                return "Llave Derecha";
+            case LexicoConstants.ParIzquierdo:
+                return "Paréntesis Izquierdo";
+            case LexicoConstants.ParDerecho:
+                return "Paréntesis Derecho";
+            case LexicoConstants.ParCuaIzquierdo:
+                return "Corchete Izquierdo";
+            case LexicoConstants.ParCuaDerecho:
+                return "Corchete Derecho";
+            case LexicoConstants.Punto:
+                return "Punto";
+            case LexicoConstants.Coma:
+                return "Coma";
+            case LexicoConstants.PuntoComa:
+                return "Punto y Coma";
+            case LexicoConstants.SalirBucle:
+                return "Salir del Bucle";
+            case LexicoConstants.Eliminar:
+                return "Eliminar";
+            case LexicoConstants.Ejecucion_Simultanea:
+                return "Interrupción";
+            case LexicoConstants.Numero:
+                return "Número";
+            case LexicoConstants.IDENTIFICADOR:
+                return "IDENTIFICADOR";
+            default:
+                return "Token Desconocido";
+        }
+    }
+}
+
+PARSER_END(Lexico)
+
+SKIP : 
+{
+  " "| "\t" | "\r" | "\n"
+}
+
+
+TOKEN : 
+{
+    < TipoDato : ("true"|"false"|"trace_var"|"nil"|"linspace"|"randn"|"rand"|"eye"|"ones"|"zeros"|"persistent"|"sort"|"undef"|"state"|"our"|"set"|"packed"|"absolute"|"file"|"record"|"COMPLEX"|"DOUBLE PRECISION"|"char"|"PARAMETER"|"DIMENSION"|"ALLOCATABLE"|"CHARACTER"|"float"|"abstract"|"asm"|"auto"|"sizeof"|"static_cast"|"nullptr"|"constexpr"|"override"|"virtual"|"double"|"null"|"undefined"|"NaN"|"array"|"string"|"int"|"putStrLn"|"void"|"list"|"dict"|"str"|"boolean"|"struct"|"mut"|"enum"|"const"|"type"|"data"|"var"|"enum"|"INTEGER"|"REAL"|"val"|"mutable")+ > 
+}
+
+TOKEN: 
+{
+    < OpAritmetico : ("div"|"+"|"-"|"/"|"*"|"**") > 
+}
+
+TOKEN:
+{
+    < OpAsignacion : ("="|"MOVE") > 
+}
+TOKEN:
+{
+    < OpRelacional : ("<"|">"|"<="|">="|"=="|"!=") > 
+}
+
+TOKEN:
+{
+    < OpLogico : ("explicit"|"not"|"xor"|"or"|"and"|"&"| "&&" | "||" | "|") > 
+}
+
+TOKEN:
+{
+    < Leer : ("attr_reader"|"readln"|"readline"|"FORMAT"|"ENTRY"|"ifstream"|"cin"|"scanf"|"read"|"INPUT"|"input"|"IO"|"self") > 
+}
+
+TOKEN:
+{
+    < Preguntar : ("switch"|"checked"|"guard"|"rethrows"|"willSet"|"module_eval"|"class_eval"|"defined?"|"rescue"|"size"|"length"|"grep"|"unless"|"elsif"|"of"|"LOGICAL"|"callable"|"isset"|"empty"|"if"|"match"|"unsafe"|"maybe"|"instanceof") > 
+}
+
+TOKEN:
+{
+    < Bucle : ("next"|"retry"|"redo"|"last"|"downto"|"to"|"repeat"|"CYCLE"|"foreach"|"for"|"PERFORM"|"DO"|"do"|"loop"|"CONTINUE") > 
+}
+
+TOKEN:
+{
+    < Consecuencia : ("else"|"didSet"|"mod"|"finally"|"THEN"|"ELSE") > 
+}
+
+TOKEN: //MODIFICADO ANTES Aleatorio
+{
+    < Aleatorio : ("random") > 
+}
+
+TOKEN:
+{
+    < DefFuncion : ("mutating"|"associatedtype"|"event"|"define_singleton_method"|"alias"|"reshape"|"map"|"my"|"EXTERNAL"|"insteadof"|"def"|"fn"|"func"|"function") > 
+}
+
+TOKEN:
+{
+   < Retroceder : ("some"|"return"|"RETURN") > 
+}
+
+TOKEN:
+{
+    < Privacidad : ("subscript"|"fileprivate"|"protected_send"|"private_send"|"protected_class_method"|"private_class_method"|"EQUIVALENCE"|"COMMON"|"global"|"private"|"friend"|"protected"|"public"|"defp") > 
+|   < Alcance: "static">
+}
+
+TOKEN:
+{
+    < Clase : ("singleton_class"|"extends"|"class") > 
+}
+
+TOKEN:
+{
+   < ClaseInicializar : ("new"|"instanceVariableNames") > 
+}
+  
+TOKEN:
+{
+   < Importar : ("prepend"|"package"|"implementation"|"goto"|"use"|"implements"|"import"|"impl") > 
+}
+
+TOKEN:
+{
+   < ConvertirTipoDato : ("parse"|"convertTo"|"convert") > 
+}
+
+TOKEN: //MODIFICADO, antes era PROCEDIMIENTO
+{
+    < Pertenencia : ("indirect"|"attr_accessor"|"extend"|"ensure"|"sub"|"MODULE PROCEDURE"|"trait"|"SUBROUTINE"|"in") > 
+}
+
+TOKEN:
+{
+    < AtraparExcepcion : ("catch") > 
+}
+
+TOKEN:
+{
+    < DelimitarCodigo : ("module_function"|"uses"|"unit"|"begin"|"inline"|"PROCEDURE DIVISION"|"PROGRAM") > 
+}
+
+TOKEN:
+{
+    < Escribir : ("printl"|"printf"|"print"|"DISPLAY"|"PUT"|"LINE"|"attr_writer"|"plot3"|"grid"|"hold"|"legend"|"title"|"ylabel"|"xlabel"|"plot"|"disp"|"fprintf"|"warning"|"say"|"writeln"|"WRITE(,)"|"OPEN"|"echo"|"ofstream"|"endl"|"cout"|"Write"|"console"|"IO") > 
+}
+
+TOKEN:
+{
+    < DelimitarFinal : ("default"|"STOP"|"UNTIL"|"die"|"exit"|"STOP RUN"|"END"|"DO END"|"END PROGRAM"|"END SUBROUTINE") > 
+}
+
+TOKEN:
+{
+    < Excepcion : ("e"|"ex") > 
+}
+
+TOKEN:
+{
+    < Llamar : ("defer"|"instance_variable_get"|"public_send"|"autoload"|"included"|"method_missing"|"label"|"SAVE"|"parent"|"using"|"include"|"require"|"CALL"|"call"|"super") > 
+}
+
+TOKEN:
+{
+    < Cuando : ("while") >  
+}
+ 
+TOKEN:
+{
+    < DefinirModulo : ("as"|"namespace"|"defmodule"|"module") > 
+}
+
+TOKEN:
+{
+    < Encadenar : ("with") > 
+}
+
+TOKEN:
+{
+    < Objeto : ("object") > 
+}
+
+TOKEN:
+{
+    < AutoReferencia : ("unowned"|"itself"|"yield_self"|"ENCODING"|"self"|"this") > 
+}
+
+TOKEN:
+{
+    < InicializarObj : ("typealias"|"initialize") > 
+}
+
+TOKEN:
+{
+    < Metodo : ("dynamic"|"inout"|"interface"|"method") > 
+}
+
+TOKEN:
+{
+    < LlaveIzquierda : ("{") > 
+}
+
+TOKEN:
+{
+    < LlaveDerecha : ("}") > 
+}
+
+TOKEN:
+{
+    < ParIzquierdo : ("(") > 
+}
+
+TOKEN:
+{
+    < ParDerecho : (")") > 
+}
+
+TOKEN:
+{
+    < ParCuaIzquierdo : ("[") > 
+}
+
+TOKEN:
+{
+    < ParCuaDerecho : ("]") > 
+}
+
+TOKEN:
+{
+    < Punto : (".") > 
+}
+
+TOKEN:
+{
+    < Coma : (",") > 
+}
+
+TOKEN:
+{
+    < PuntoComa : (";") > 
+}
+
+TOKEN:
+{
+    < SalirBucle : ("REWIND"|"break") > 
+}
+
+TOKEN:
+{
+    < Eliminar : ("remove_instance_variable"|"undef_method"|"chomp"|"unset"|"delete") > 
+}
+
+TOKEN: //EJECUCION SIMULTANEA COMO LOS HILOS DE C#  
+{
+    < Ejecucion_Simultanea : ("parallel") > 
+}
+
+TOKEN :
+{
+    < Numero: (["0"-"9"])+ > 
+}
+
+TOKEN :
+{
+    < DosPuntos: (":")+ > 
+}
+
+TOKEN : 
+{
+    <IDENTIFICADOR: (["_", "a"-"z", "A"-"Z"]) (["_", "a"-"z", "A"-"Z", "0"-"9"])* >
+}
+
+TOKEN: 
+{
+    <Texto: "\"" (~["\""])* "\"">
+}
+
+
+//ESTRUCTURA SYNTAX//
+//OPERACIONES EXISTENTES//
+
+void DoWhile(): {} //OPERACION 1 EXISTENTE
+{
+    <Bucle> <LlaveIzquierda> BloqueInstrucciones() <LlaveDerecha> <Cuando> <ParIzquierdo> Condicional() <ParDerecho> <PuntoComa>
+}
+
+void CicloWhile(): {} //OPERACION 2 EXISTENTE
+{
+    <Cuando> <ParIzquierdo> Condicional() <ParDerecho> <LlaveIzquierda> BloqueInstrucciones() <LlaveDerecha> 
+}
+
+void ImprimirEnPantalla():{} //OPERACION 3 EXISTENTE
+{
+    <Escribir> <ParIzquierdo> ((<Texto>| <IDENTIFICADOR>)) ( <Encadenar> (<Texto>| <IDENTIFICADOR>) )* <ParDerecho> <PuntoComa> 
+}
+
+void AsignarValorID(): {} //OPERACION 4 EXISTENTE
+{
+    <OpAsignacion> ( <Numero> | <IDENTIFICADOR> ) ( <PuntoComa> | ( <OpAritmetico> ( <Numero> | <IDENTIFICADOR> ) <PuntoComa> ) )
+}
+
+void AsignarValorIDExt(): {}
+{
+     <OpAsignacion> ( <Numero> | <IDENTIFICADOR> ) ( <PuntoComa> | ( <OpAritmetico> ( <Numero> | <IDENTIFICADOR> ) <PuntoComa> ) )
+}
+
+void InicializarClase(): {} //OPERACION 5 EXISTENTE
+{
+    <IDENTIFICADOR> <OpAsignacion> <ClaseInicializar> <IDENTIFICADOR> <ParIzquierdo> <ParDerecho> <PuntoComa>
+}
+
+void AsignarValorID_InicializarClase_GuardarDato_EliminarID(): {}
+{
+    <IDENTIFICADOR> (AsignarValorID() | InicializarClase() | Guardar_Eliminar())
+}
+
+void ExpresionAritmticaGeneral(): {}
+{
+    (<IDENTIFICADOR> (<OpAritmetico> (<IDENTIFICADOR>|<Numero>))?) | (<Numero> <OpAritmetico> (<IDENTIFICADOR>|<Numero>))
+}
+
+void Condicion(): {} //OPERACION 6 EXISTENTE
+{
+    <Preguntar> <ParIzquierdo> Condicional() <ParDerecho> <LlaveIzquierda> BloqueInstrucciones() <LlaveDerecha> ((Consecuencias())?)
+}
+
+void Condicional():{} 
+{
+    (<IDENTIFICADOR> <OpRelacional> (<IDENTIFICADOR> | <Numero>))  | (<Numero> <OpRelacional> <IDENTIFICADOR>)
+}
+
+void Consecuencias(): {} 
+{
+   <Consecuencia> <LlaveIzquierda> BloqueInstrucciones() <LlaveDerecha>
+}
+
+void DeclararMetodo(): {} //OPERACION 7 EXISTENTE
+{
+    (<Alcance>)? <TipoDato> <IDENTIFICADOR> ParametrosDelMetodo() 
+    <LlaveIzquierda> BloqueInstrucciones() <LlaveDerecha> 
+}
+
+void ParametrosDelMetodo(): {}
+{
+    <ParIzquierdo> ( <TipoDato> <IDENTIFICADOR> (<Coma> <TipoDato> <IDENTIFICADOR>)* )? <ParDerecho>
+}
+
+void DeclararClase_Metodo(): {}
+{
+    <Privacidad> (DeclararMetodo() | DefinirClase())
+}
+
+void DefinirClase(): {} //OPERACION 8 EXISTENTE
+{
+    <Clase> <IDENTIFICADOR> <LlaveIzquierda> BloqueInstrucciones()   <LlaveDerecha>
+}
+
+void Importacion(): {} //OPERACION 9 EXISTENTE
+{
+    <Importar> <IDENTIFICADOR> ( <Punto> <IDENTIFICADOR> )* <PuntoComa>
+}
+
+void LlamarMetodo(): {} //OPERACION 10 EXISTENTE
+{
+    <Llamar> <IDENTIFICADOR> ParametrosDelMetodo() <PuntoComa>
+}
+
+void DeclararMetodoInterno(): {}
+{
+    (<Alcance>)? <TipoDato> <IDENTIFICADOR> ParametrosDelMetodo() 
+    <LlaveIzquierda> BloqueInstrucciones() <LlaveDerecha> 
+}
+
+void DeclararClaseInterna(): {}
+{
+    <Clase> <IDENTIFICADOR> <LlaveIzquierda> BloqueInstrucciones() <LlaveDerecha>
+}
+
+void Declarar_ClaseInterna_MetodoInterno(): {}
+{
+    <Privacidad> ( DeclararMetodoInterno()|DeclararClaseInterna())
+}
+
+void RetornarValor(): {}
+{
+    <Retroceder> (ExpresionAritmticaGeneral()) <PuntoComa>
+}
+
+void DeclararIdentificador(): {} //OPERACION 11 EXISTENTE int 
+{
+    <IDENTIFICADOR> (<OpAsignacion> ( <Numero> | <IDENTIFICADOR> ))? 
+    (
+        <Coma> <IDENTIFICADOR> (<OpAsignacion> ( <Numero> | <IDENTIFICADOR> ))?
+    )* 
+    <PuntoComa>
+}
+
+void DeclararIdentificador_Matriz(): {}
+{
+    <TipoDato> (DeclararIdentificador() | DeclararMatriz())
+}
+
+//OPERACIONES PROPIAS//
+
+void DeclararMatriz(): {} // int[A|5] numeros; OPERACION PROPIA 1
+{
+    <ParCuaIzquierdo> (<Numero>|<IDENTIFICADOR>) <ParCuaDerecho> <IDENTIFICADOR> <PuntoComa>
+}
+
+void GuardarDato(): {} //Entrada.read; OPERACION PROPIA 2
+{
+    <Leer><PuntoComa>
+}
+
+void Guardar_Eliminar(): {}
+{
+    <Punto> (GuardarDato() | EliminarID())
+}
+
+void GuardarExt_EliminarExt(): {}
+{
+    <Punto> (GuardarDatoExt() | EliminarIDExt())
+}
+
+void GuardarDatoExt(): {}
+{
+    <Leer><PuntoComa>
+}
+
+void AsignarValorIDExt_GuardarDatoExt_EliminarIDExt(): {}
+{
+    <IDENTIFICADOR> (AsignarValorIDExt() | GuardarExt_EliminarExt())
+}
+
+void EliminarID(): {} //Variable.delete; OPERACION PROPIA 3
+{
+    <Eliminar><PuntoComa>
+}
+
+void EliminarIDExt(): {}
+{
+    <Eliminar><PuntoComa>
+}
+
+void ConvertirDato(): {} // convert(int):contador; OPERACION PROPIA 4
+{
+    <ConvertirTipoDato><ParIzquierdo><TipoDato><ParDerecho><DosPuntos><IDENTIFICADOR><PuntoComa> 
+}
+
+void ManejoDeExcepciones(): {} // catch: (ex = NombreExcepcion) { BloqueInstrucciones } OPERACION PROPIA 5 
+{
+    <AtraparExcepcion> <DosPuntos> <ParIzquierdo> <IDENTIFICADOR> <OpAsignacion> <Excepcion> <ParDerecho> <LlaveIzquierda> BloqueInstrucciones() <LlaveDerecha>  
+}
+
+void CondicionalPertenencia(): {} //  (in A == B): {int x = 5;} //OPERACION PROPIA 6 (TIPO PYTHON)
+{
+    <ParIzquierdo> <Pertenencia> <IDENTIFICADOR> <OpRelacional> <IDENTIFICADOR> <ParDerecho> <DosPuntos> 
+    <LlaveIzquierda> BloqueInstrucciones() <LlaveDerecha>  
+}
+
+void Asignar_Random_a_ID(): {} // random( 10 ; 100 ) = ClaveSegura; //OPERACION PROPIA 7
+{
+    <Aleatorio> <ParIzquierdo> <Numero> <PuntoComa> <Numero> <ParDerecho> <OpAsignacion> <IDENTIFICADOR> <PuntoComa>
+}
+
+void DelimitarCodigoDelPrograma(): {} // PROGRAM: Programa_para_realizar_calculos_v1 OPERACION PROPIA 8
+{
+    <DelimitarCodigo> <DosPuntos> <IDENTIFICADOR>
+}
+
+void Interrumpir_Ejecucion_Del_Programa(): {} // die PROGRAM: Programa_para_realizar_calculos_v1 OPERACION PROPIA 9
+{
+    <DelimitarFinal> DelimitarCodigoDelPrograma() <PuntoComa>
+}
+
+void EjecucionParalela(): {} // parallel ( CalculosParteUno {BloqueInstrucciones}; CalculosParteDos {BloqueInstrucciones}) OPERACION PROPIA 10
+{
+    <Ejecucion_Simultanea> <ParIzquierdo> 
+    <IDENTIFICADOR> <LlaveIzquierda> BloqueInstrucciones() <LlaveDerecha> 
+    <PuntoComa>                           
+    <IDENTIFICADOR> <LlaveIzquierda> BloqueInstrucciones() <LlaveDerecha> 
+    <ParDerecho>
+}
+
+//INTRUCCIONES DENTRO DE ALGUNA OTRA ESTRUCTURA
+void BloqueInstrucciones(): {}
+{
+    
+    (   
+        DeclararIdentificador_Matriz() 
+    |   Condicion() //CONDICION YA INCLUYE LA POSIBLE CONSECUENCIA
+    |   ImprimirEnPantalla()
+    |   DoWhile()
+    |   CicloWhile()
+    |   RetornarValor()
+    |   LlamarMetodo()
+    |   AsignarValorID_InicializarClase_GuardarDato_EliminarID()
+    |   Declarar_ClaseInterna_MetodoInterno()
+    |   GuardarDato()
+    |   ConvertirDato()
+    |   ManejoDeExcepciones()
+    |   CondicionalPertenencia()
+    |   Asignar_Random_a_ID()
+    |   Interrumpir_Ejecucion_Del_Programa()
+    |   EjecucionParalela()
+    )+ 
+}
+
+//TOTALIDAD DEL CODIGO A ANALIZARSE
+void SyntaxAnalisis() : {}
+{
+    Encabezado()
+    CuerpoCodigo()
+}
+
+//COSAS OPCIONALES SOLAMENTE AL INICIO DEL CODIGO
+void Encabezado(): {}
+{   
+    ( DelimitarCodigoDelPrograma() ) ( Importacion() )*
+}
+
+//RESTO DEL CODIGO
+void CuerpoCodigo(): {}
+{
+    //ESTRUCTURA GENERAL DEL CODIGO
+    (   
+        DeclararIdentificador_Matriz()
+    |   Condicion()
+    |   ImprimirEnPantalla()
+    |   DoWhile()
+    |   CicloWhile()
+    |   LlamarMetodo()
+    |   DeclararClase_Metodo() 
+    |   AsignarValorIDExt_GuardarDatoExt_EliminarIDExt()
+    |   ConvertirDato()
+    |   ManejoDeExcepciones()
+    |   CondicionalPertenencia()
+    |   Asignar_Random_a_ID()
+    |   Interrumpir_Ejecucion_Del_Programa()
+    |   EjecucionParalela()
+    )+
+}
