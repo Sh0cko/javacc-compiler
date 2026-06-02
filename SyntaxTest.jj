@@ -1,0 +1,114 @@
+PROGRAM: Programa_Prueba1
+
+import java.utils;
+import VisionPro;
+
+(in A == B): 
+{
+int y = 10;
+}
+
+parallel(Procedimiento1 
+{ 
+	random (10; 100) = NumeroRandom1; 
+} ; Procedimiento2
+{
+	random (10; 100) = NumeroRandom2;
+})
+
+
+
+
+public static void Main(string args) {
+	int x, b = 10, a = 5;
+	int y = 10;
+	int[y] z;
+	string Guardar;
+	print("Ingrese su nombre");
+	GuardadoNombre.read;
+
+
+(in A == B): 
+	{
+		string palabra;
+	}
+	
+	public string Escribir ()
+	{
+		print("Hola mundo");
+	}
+
+	public class persona
+	{
+		Persona persona1 = new Persona();
+
+		return a + b;
+	
+		public int Sumar (int a, int b)
+		{
+      			return a + b;
+			random (10; 100) = NumeroRandom; 
+			parallel(Procedimiento1 
+			{ 
+				random (10; 100) = NumeroRandom1; 
+			} ; Procedimiento2
+			{
+				random (10; 100) = NumeroRandom2;
+			})
+
+		}
+		
+		catch: (NombreExcepcion = ex)
+		{
+			print("Se ha encontrado una excepción: " with NombreExcepcion); 
+		}
+
+	}
+
+	
+	
+	call Escribir();
+
+	if ( z >= 100)
+	{
+		print(z with " es mayor o igual al 100");
+	} else
+	{
+		print(z with " es menos a 100");
+	}
+
+convert(int): contador;
+
+}
+
+die PROGRAM: Programa_Prueba1;
+
+catch: (NombreExcepcion = ex)
+{
+	print("Se ha encontrado una excepción: " with NombreExcepcion); 
+}
+
+
+
+convert(int): contador;
+
+do
+{
+	z= z+1;
+} while (z < 1000);
+
+while (z > x)
+{
+	print(z with " es mayor a 100");
+}
+
+
+	persona1.delete;
+
+
+
+
+public int Sumar (int a, int b)
+{
+      return a + b;
+}
